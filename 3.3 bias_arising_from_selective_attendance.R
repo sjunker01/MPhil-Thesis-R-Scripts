@@ -4,6 +4,7 @@ library(sandwich)
 library(fmsb)
 library(AER)
 
+
 # For this analysis, use the datasets which have all the people, even the ones who dropped
 # out after the first questionnaire; but also only include those controls who INTENDED to
 # take the course!
