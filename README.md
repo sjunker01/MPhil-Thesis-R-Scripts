@@ -1,5 +1,5 @@
 # MPhil Thesis R Scripts
-Here you can find the scripts I used for the statistical analysis of my MPhil Thesis data.
+Here you can find the scripts I created to statistically analyse my MPhil Thesis data.
 The files are numbered and named after the headings within the results section of my thesis.
 The additional model assessing predictors of baseline mental health scores can also be found here.
 
