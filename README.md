@@ -5,7 +5,7 @@ The additional model assessing predictors of baseline mental health scores can a
 
 ## Explanation of variables
 ### Demographic variables
-Most demographic variables are intuitive (Age = "age", etc).
+Most demographic variables are intuitive (Age = "age", etc). "med_base" refers to baseline meditation, i.e. whether someone has practiced mindfulness before attending the course.
 ### Timepoints
 For variables recorded at a certain timepoint, that timepoint is encompassed in the variable name as follows: "variable_timepoint". Timepoints are: baseline = "base", post-intervention = "post", 1-year follow-up = "fu1", 2-year FU = "fu2", 3-year FU = "fu3.
 ### Mental health scores
