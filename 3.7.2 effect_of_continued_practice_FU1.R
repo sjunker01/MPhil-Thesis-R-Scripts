@@ -16,7 +16,7 @@ round_df <- function(x, digits) {
   x
 }
 
-### Create color palette (darkest)
+### Create color palette
 cols <- c("#e47e32", "#ff9e1f", "#ae9764", "#719f8d", "#509094", "#d2c078")
 col1 <- cols[1]
 col2 <- cols[2]
@@ -25,98 +25,17 @@ col4 <- cols[4]
 col5 <- cols[5]
 col6 <- cols[6]
 
-wide <- read_csv("data_input(4)/mindful_clean.csv",
-                 col_types = cols(arm = col_factor(levels = c("intervention", "control", "MMJ")),
-                                  gender = col_factor(levels = c("Female", "Male"))))
 
-wide <- wide %>% rename(row = X1)
-
-# Bin ethnicity
-wide$ethnicity <- with(wide, ifelse(ethnicity == "White", "White", "Non-White"))
-
-# Rename arm
-wide <- wide %>% 
-  mutate(intake = ifelse(arm == "intervention", "Intake 1",
-                         ifelse(arm == "control", "Intake 2",
-                                ifelse(arm == "MMJ", "Intake 3", NA))))
-wide$intake <- factor(wide$intake, levels = c("Intake 1", "Intake 2", "Intake 3"))
+### Read in data
+wide <- read_csv("data_input(4)/mindful_clean.csv")
 
 
 
-### Plotting
-# Let us plot how formal and informal practice at 1-year FU are related
-lm.1 <-lm(formal_h_total_fu1 ~ informal_total_fu1, data = wide)
-anova(lm.1)
-wide %>%
-  ggplot(aes(formal_h_total_fu1, informal_total_fu1)) +
-  geom_point(alpha = 0.5, position = position_jitter(w = 4, h = 4)) +
-  theme_bw() +
-  geom_smooth(method = "lm") +
-  labs(x = "Formal practice from start of course", y = "Informal practice from start of course")
-
-wide %>%
-  ggplot(aes(formal_h_after_fu1, informal_after_fu1)) +
-  geom_point(position = position_jitter(w = 4, h = 4), alpha = 0.5) +
-  theme_bw() +
-  geom_smooth(method = "lm")+
-  labs(x = "Formal practice after course", y = "Informal practice after course")
-
-
-
-
-
-# Let's see if we get the same
-wide.fun <- wide %>% filter(!is.na(core_fu1) & !is.na(formal_h_total_fu1))
-lm.plotti <- lm(core_fu1 ~ formal_h_total_fu1, data = wide.fun)
-summary(lm.plotti)
-wide.fun$fun_predict <- predict(lm.plotti, type = "response")
-
-
-ggplot(wide.fun, aes(x = formal_h_total_fu1, y = fun_predict)) +
-  geom_point(aes(y = core_fu1),
-             alpha=.5, position=position_jitter(h=.2), size = 1.8) +
-  geom_line(size = 1.2)
-
-
-##### Cleaning
-
-# Want variables which are comparable.
-summary(wide$formal_h_total_fu1) # Number of hours per week is this/52 (1 year)
-wide$formal_h_total_fu1 <- (wide$formal_h_total_fu1)/52
-
-summary(wide$formal_h_after_fu1) # Number of hours per week is this/44 (1 year - course)
-# (which is formal_freq_h_week_fu1 really but ok)
-wide$formal_h_after_fu1 <- (wide$formal_h_after_fu1)/44
-
-summary(wide$informal_total_fu1) # To convert back to Never - Very often: need 5 levels.
-# Maximum can be 5*52 = 260; rarely would be 1*52 = 52.
-wide$informal_total_fu1 <- (wide$informal_total_fu1)/52
-
-summary(wide$informal_after_fu1) # Maximum is 5*44 = 220 (informal_freq_fu1 but ok)
-wide$informal_after_fu1 <- (wide$informal_after_fu1)/44
-
-
-# Correlations
-wide.cor <- wide %>%
-  mutate(diff_c = core_post - core_base, diff_w = wb_post - wb_base) %>% 
-  select(diff_c, diff_w, starts_with("core"), starts_with("wb"), contains("total"), contains("after"))
-cor(wide.cor, method = "pearson", use = "na.or.complete")
-pairs(wide.cor, lower.panel = NULL)
-
-correlations <- cor(wide.cor, use = "pairwise.complete.obs", method = "pearson")
-corrplot(correlations, method = "circle")
-
-# This is the weirdest thing. Scores post-int seem to correlate
-# with subsequenc informal practice (fu2, fu3)
-
-
-
-##### 1-year FU
+##### Stats
 
 ### CORE
 
-## Baseline score + practice from baseline
-
+# Unadjusted
 wide_c1_unadj <- wide %>% # n = 176
   filter(!is.na(formal_h_total_fu1) & !is.na(informal_total_fu1) &
            !is.na(age) & !is.na(gender) & !is.na(core_base)) %>%
@@ -124,7 +43,7 @@ wide_c1_unadj <- wide %>% # n = 176
 
 lm.c1.unadj <- lm(core_fu1 ~ formal_h_total_fu1 + informal_total_fu1 + sessions_attended +
                       age + gender + intake + core_base, data = wide_c1_unadj)
-summary(lm.c1.unadj) # R^2 = 0.18, adj. R^2 = 0.15
+summary(lm.c1.unadj)
 
 # Adjusted for diasbility
 wide_c1_adj <- wide %>% # n = 175
