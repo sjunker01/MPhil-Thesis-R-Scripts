@@ -17,54 +17,19 @@ round_df <- function(x, digits) {
 }
 
 
+### Read in files
+wide <- read_csv("data_input(4)/mindful_clean.csv")
 
-wide <- read_csv("data_input(4)/mindful_clean.csv",
-                 col_types = cols(arm = col_factor(levels = c("intervention", "control", "MMJ")),
-                                  gender = col_factor(levels = c("Female", "Male"))))
-long <- read_csv("data_input(4)/mindful_long.csv")
-
-wide <- wide %>% rename(row = X1)
-long <- long %>% dplyr::select(-X1)
-
-### Cleaning
-
-# Bin ethnicity
-wide$ethnicity <- with(wide, ifelse(ethnicity == "White", "White", "Non-White"))
-
-# Rename arm
-wide <- wide %>% 
-  mutate(intake = ifelse(arm == "intervention", "Intake 1",
-                         ifelse(arm == "control", "Intake 2",
-                                ifelse(arm == "MMJ", "Intake 3", NA))))
-wide$intake <- factor(wide$intake, levels = c("Intake 1", "Intake 2", "Intake 3"))
-
-
-
+### Cleaning - bring timepoint into the correct order
 long$timepoint <- factor(long$timepoint, levels = c("base", "post", "fu1", "fu2", "fu3"))
 
 
 
-### Plotting
-# Let us plot how formal and informal practice at post-intervention are related
-lm.1 <-lm(formal_h_total_post ~ informal_total_post, data = wide)
-summary(lm.1)
-wide %>%
-  group_by(informal_total_post, formal_h_total_post) %>% 
-  summarize(n_obs = n()) %>% 
-  ggplot(aes(informal_total_post, formal_h_total_post)) +
-  geom_point(aes(size = n_obs)) +
-  theme_bw() +
-  geom_smooth(method = "lm", fill = NA)+
-  labs(x = "Informal practice during the course", y = "Formal practice during the course")
+##### Stats
 
+### CORE
 
-
-##### Effect of practice on scores: For each timepoint with the respective total amount of practice done.
-
-
-### Models without disability adjustment
-
-## CORE
+## Not adjusted for disability
 wide_core_unadj <- wide %>% # n = 276
   filter(!is.na(core_post) & !is.na(formal_freq_h_week_post) & !is.na(informal_freq_post)
                 & !is.na(age) & !is.na(gender) & !is.na(core_base))
@@ -73,33 +38,15 @@ lm.core.unadj <- lm(core_post ~ formal_freq_h_week_post + informal_freq_post +
                       sessions_attended + age + gender + intake + core_base, data = wide_core_unadj)
 summary(lm.core.unadj)
 
-
-## WEMWBS
-wide_wemwbs_unadj <- wide %>% # 275
-  filter(!is.na(wb_post) & !is.na(formal_freq_h_week_post) & !is.na(informal_freq_post)
-                & !is.na(age) & !is.na(gender) & !is.na(wb_base))
-
-lm.wemwbs.unadj <- lm(wb_post ~ formal_freq_h_week_post + informal_freq_post +
-                            sessions_attended + age + gender + intake + wb_base, data = wide_wemwbs_unadj)
-summary(lm.wemwbs.unadj)
-
-
-
-### Models with disability adjustment
-
-## CORE 
+## Adjusted for disability
 wide_core_adj <- wide %>% # 273
   filter(!is.na(core_post) & !is.na(formal_freq_h_week_post) & !is.na(informal_freq_post)
                 & !is.na(age) & !is.na(gender) & !is.na(disability) & !is.na(core_base))
 
-
-## Model with and without square root transformation of dependent variable.
-
 lm.core.adj <- lm(core_post ~ formal_freq_h_week_post + informal_freq_post + sessions_attended
                       + age + gender + intake + disability + core_base, data = wide_core_adj)
-lm.core.adj.sqrt <- lm(sqrt(core_post) ~ formal_h_total_post + informal_total_post +
-                      sessions_attended + age + gender + intake + disability + core_base,
-                      data = wide_core_adj)
+
+summary(lm.core.adj)
 
 # Check this model for normality
 par(mfrow = c(2,2))
@@ -107,15 +54,24 @@ plot(lm.core.adj)
 par(mfrow = c(1,1))
 hist(lm.core.adj$residuals)
 ols_test_normality(lm.core.adj)
-# Not great
+# Looks non-normally distributed
+
+# Transform dependent core_post variable via sqrt().
+lm.core.adj.sqrt <- lm(sqrt(core_post) ~ formal_h_total_post + informal_total_post +
+                      sessions_attended + age + gender + intake + disability + core_base,
+                      data = wide_core_adj)
 
 par(mfrow = c(2,2))
 plot(lm.core.adj.sqrt)
 par(mfrow = c(1,1))
 hist(lm.core.adj.sqrt$residuals)
 ols_test_normality(lm.core.adj.sqrt)
-# Better. Check whether results are similar.
+# Better.
 
+# Check whether results are similar.
+summary(lm.core.adj)
+summary(lm.core.adj.sqrt)
+# Yes, similar.
 
 ## Let's investigate the outliers.
 # Compute the cook's distance for each point
@@ -126,34 +82,61 @@ abline(h = 4*mean(cooksd, na.rm=T), col="red")  # add cutoff line
 text(x=6:length(cooksd)+2, y=cooksd, labels=ifelse(cooksd>4*mean(cooksd, na.rm=T),names(cooksd),""), col="red")  # add labels
 # Let's remove row 3 and 195
 
+# New data set
 wide_core_out <- wide_core_adj %>% filter(row != 3 & row != 195) %>% 
   mutate(row = row_number())
 
-# Looks alright apart from one outlier which may affect the model quite a bit.
-# Let's remove the outlier and compare the two models
+# New model
 lm.core.adj.out <- lm(core_post ~ formal_h_total_post + informal_freq_post + sessions_attended
                       + age + gender + disability + core_base, data = wide_core_out)
 
+## Investigate outliers again
+# Compute the cook's distance for each point
+cooksd <- cooks.distance(lm.core.adj.out)
+# Plot that.
+plot(cooksd, pch="*", cex=2, main="Influential Obs by Cooks distance")  # plot cook's distance
+abline(h = 4*mean(cooksd, na.rm=T), col="red")  # add cutoff line
+text(x=6:length(cooksd)+2, y=cooksd, labels=ifelse(cooksd>4*mean(cooksd, na.rm=T),names(cooksd),""), col="red")  # add labels
+# Looks fine
+
+# Compare all datasets
 summary(lm.core.adj)
 summary(lm.core.adj.sqrt)
 summary(lm.core.adj.out)
+# All similar
 
+
+### WEMWBS
+wide_wemwbs_unadj <- wide %>% # 275
+  filter(!is.na(wb_post) & !is.na(formal_freq_h_week_post) & !is.na(informal_freq_post)
+                & !is.na(age) & !is.na(gender) & !is.na(wb_base))
+
+lm.wemwbs.unadj <- lm(wb_post ~ formal_freq_h_week_post + informal_freq_post +
+                            sessions_attended + age + gender + intake + wb_base, data = wide_wemwbs_unadj)
+summary(lm.wemwbs.unadj)
 # Don't need to adjust WEMWBS model since disability never showed an impact on these scores
 
+# Check this model for normality
+par(mfrow = c(2,2))
+plot(lm.wemwbs.unadj)
+par(mfrow = c(1,1))
+hist(lm.wemwbs.unadj$residuals)
+ols_test_normality(lm.wemwbs.unadj)
+# Looks normally distributed
+
+## Let's investigate the outliers.
+# Compute the cook's distance for each point
+cooksd <- cooks.distance(lm.wemwbs.unadj)
+# Plot that.
+plot(cooksd, pch="*", cex=2, main="Influential Obs by Cooks distance")  # plot cook's distance
+abline(h = 4*mean(cooksd, na.rm=T), col="red")  # add cutoff line
+text(x=6:length(cooksd)+2, y=cooksd, labels=ifelse(cooksd>4*mean(cooksd, na.rm=T),names(cooksd),""), col="red")  # add labels
+# Looks alright
 
 
-### Check for multicolinearity of practice / attendance variables
-lm.collinear <- lm(informal_freq_post ~ formal_freq_h_week_post, data = wide)
-lm.collinear2 <- lm(sessions_attended ~ formal_freq_h_week_post, data = wide)
-lm.collinear3 <- lm(informal_freq_post ~ sessions_attended, data = wide)
-VIF(lm.collinear) # 1.23 (R^2 here is 0.19, it's fine)
-VIF(lm.collinear2) # 1.38
-VIF(lm.collinear3) # 1.19
-### WRONG
-
+### Check models for multicolinearity
 vif(lm.core.adj)
 vif(lm.wemwbs.unadj)
-
 
 # A VIF of 1.8 tells us that the variance (the square of the standard error)
 # of a particular coefficient is 80% larger than it would be if that predictor
@@ -165,55 +148,21 @@ vif(lm.wemwbs.unadj)
 
 ### Unadjusted
 
-# CORE
+## CORE
+# Unadjusted
 stargazer(cbind(Estimate = coef(lm.core.unadj), Std.Error = coef(summary(lm.core.unadj))[,2],
                 z.value = coef(summary(lm.core.unadj))[,3], confint(lm.core.unadj),
                 p_value = coef(summary(lm.core.unadj))[,4]), type = "text", style = "qje", digits = 3)
 
-# Export
-core.unadj <- round_df(cbind(Estimate = coef(lm.core.unadj), Std.Error = coef(summary(lm.core.unadj))[,2],
-                             confint(lm.core.unadj),
-                             p_value = coef(summary(lm.core.unadj))[,4]), 3)
-write.csv(core.unadj, file = "model_output/6_core_unadj.csv")
-
-
-# WEMWBS
-stargazer(cbind(Estimate = coef(lm.wemwbs.unadj), Std.Error = coef(summary(lm.wemwbs.unadj))[,2],
-                z.value = coef(summary(lm.wemwbs.unadj))[,3], confint(lm.wemwbs.unadj),
-                p_value = coef(summary(lm.wemwbs.unadj))[,4]), type = "text", style = "qje", digits = 3)
-
-# Export
-wemwbs.unadj <- round_df(cbind(Estimate = coef(lm.wemwbs.unadj), Std.Error = coef(summary(lm.wemwbs.unadj))[,2],
-                               confint(lm.wemwbs.unadj),
-                             p_value = coef(summary(lm.wemwbs.unadj))[,4]), 3)
-write.csv(wemwbs.unadj, file = "model_output/6_wemwbs_unadj.csv")
-
-
-### Unadjusted
-
-# CORE
+# Adjusted
 stargazer(cbind(Estimate = coef(lm.core.adj), Std.Error = coef(summary(lm.core.adj))[,2],
                 z.value = coef(summary(lm.core.adj))[,3], confint(lm.core.adj),
                 p_value = coef(summary(lm.core.adj))[,4]), type = "text", style = "qje", digits = 3)
 
-# Export
-core.adj <- round_df(cbind(Estimate = coef(lm.core.adj), Std.Error = coef(summary(lm.core.adj))[,2],
-                           confint(lm.core.adj),
-                             p_value = coef(summary(lm.core.adj))[,4]), 3)
-write.csv(core.adj, file = "model_output/6_core_adj.csv")
-
-
-# WEMWBS
-stargazer(cbind(Estimate = coef(lm.wemwbs.adj), Std.Error = coef(summary(lm.wemwbs.adj))[,2],
-                z.value = coef(summary(lm.wemwbs.adj))[,3], confint(lm.wemwbs.adj),
-                p_value = coef(summary(lm.wemwbs.adj))[,4]), type = "text", style = "qje", digits = 3)
-
-# Export
-wemwbs.adj <- round_df(cbind(Estimate = coef(lm.wemwbs.adj), Std.Error = coef(summary(lm.wemwbs.adj))[,2],
-                             confint(lm.wemwbs.adj),
-                               p_value = coef(summary(lm.wemwbs.adj))[,4]), 3)
-write.csv(wemwbs.adj, file = "model_output/6_wemwbs_adj.csv")
-
+## WEMWBS
+stargazer(cbind(Estimate = coef(lm.wemwbs.unadj), Std.Error = coef(summary(lm.wemwbs.unadj))[,2],
+                z.value = coef(summary(lm.wemwbs.unadj))[,3], confint(lm.wemwbs.unadj),
+                p_value = coef(summary(lm.wemwbs.unadj))[,4]), type = "text", style = "qje", digits = 3)
 
 
 
@@ -358,38 +307,3 @@ ggplot(wemwbs.inf, aes(x = informal_freq_post, y = PredictedWemwbs)) +
 
 ggsave(w.inf, filename = "plots_thesis/6_wemwbs_informal.png", device = "png",
        width = 7, height= 5, units = "in")
-
-
-
-
-
-####### Idk if I need this
-
-### See how many people got >3 WEMWBS points worse or better
-wide %>%
-  mutate(wb_diff = wb_post - wb_base) %>% 
-  mutate(diff_positive = wb_diff >= 3,
-         diff_negative = wb_diff <= -3) %>% 
-  summarize(sum(diff_positive, na.rm = TRUE), sum(diff_negative, na.rm = TRUE))
-# 142 people got more than 3 points better, 84 got more than 3 points worse
-
-
-
-
-ggplot(wide, aes(formal_h_total_post, core_post)) +
-  geom_point(position = position_jitter(w = 0.3)) +
-  geom_smooth(fill = NA) +
-  theme_bw()
-# NON-LINEAR RELATIONSHIP INDICATION
-ggplot(wide, aes(formal_h_total_post, wb_post)) +
-  geom_point(position = position_jitter(w = 0.3)) +
-  geom_smooth(fill = NA) +
-  theme_bw()
-
-# Same
-wide <- wide %>% mutate(formal_freq_post = ifelse(formal_freq_post == 0, 1, formal_freq_post))
-ggplot(wide, aes(formal_freq_post, core_post)) +
-  geom_point(position = position_jitter(w = 0.3)) +
-  geom_smooth(fill = NA) +
-  theme_bw()
-
