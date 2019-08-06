@@ -5,10 +5,8 @@ library(GGally)
 library(Amelia)
 library(corrplot)
 
+### Read in file
 wide <- read_csv("data_input(4)/mindful_clean.csv")
-
-wide <- wide %>% select(-X1)
-
 
 
 ### Check data set for missing data
@@ -92,7 +90,7 @@ pairs(wide_scores, lower.panel = NULL)
 ## By the way, you can also do it like this (takes longer but is prettier):
 ggpairs(wide_scores[,1:10])
 
-## Another way to investigate correlations VERY PRETTY:
+## Another way to investigate correlations:
 correlations <- cor(wide_scores, use = "pairwise.complete.obs", method = "pearson")
 corrplot(correlations, method="circle")
 
